@@ -18,6 +18,9 @@ pip install -r requirements.txt
 python -m uvicorn app.main:app --reload
 ```
 
+## Documentation
+
+The documentation is available at http://localhost:8000/docs
 
 ## License
 

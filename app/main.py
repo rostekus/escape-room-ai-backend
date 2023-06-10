@@ -8,7 +8,6 @@ from app.routers.text import router as text_router
 from dotenv import load_dotenv
 
 
-
 def get_application():
     _app = FastAPI(title=settings.PROJECT_NAME)
 
@@ -23,6 +22,7 @@ def get_application():
     _app.include_router(chat_router)
     _app.include_router(text_router)
     return _app
+
 
 load_dotenv()
 app = get_application()

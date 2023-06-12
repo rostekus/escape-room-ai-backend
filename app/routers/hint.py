@@ -8,7 +8,7 @@ from fastapi import APIRouter
 from app.models.hint import ChatResponse
 from app.utils.serializers.audio_serializers import AudioGoogleSerializer
 from app.utils.tts.google_tts import Text2SpeachGoogleApiModel
-
+from app.utils.tools.generate_link import generate_download_signed_url_v4
 router = APIRouter()
 
 riddle_hints = {
@@ -118,10 +118,12 @@ async def read_user_item(hint_id: int, riddle_id: int) -> ChatResponse:
     audio_buffer = text_to_speech.process(riddle_hints[(hint_id, riddle_id)], {}, {})
     audio, audio_sample_rate = sf.read(io.BytesIO(audio_buffer))
     serializer = AudioGoogleSerializer(audio, audio_sample_rate, "wav", "/tmp")
+    audio_filename=  join("audio",str(uuid.uuid4()))
     with serializer:
         serializer.serialize(
-            "audio",
-            join("audio", uuid.uuid4()),
+            "audio-escape-room",
+           audio_filename,
         )
-
-    return ChatResponse(audioUrl="", text=riddle_hints[(hint_id, riddle_id)])
+    url = generate_download_signed_url_v4("audio-escape-room",audio_filename + ".wav")
+    
+    return ChatResponse(audioUrl=url, text=riddle_hints[(hint_id, riddle_id)])

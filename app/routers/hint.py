@@ -201,5 +201,5 @@ async def read_user_item(hint_id: int, riddle_id: int) -> ChatResponse:
     url = generate_download_signed_url_v4("audio-escape-room", audio_filename + ".wav")
 
     return ChatResponse(
-        audioUrl=url, text=riddle_hints[(riddle_id, hint_id)], aiText=hint_text
+        audioUrl=url, text=hint_text, aiText=hint_text
     )

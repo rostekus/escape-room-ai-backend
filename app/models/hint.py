@@ -9,3 +9,4 @@ class HintRequest(BaseModel):
 class ChatResponse(BaseModel):
     audio_url: str = Field(..., alias="audioUrl")
     text: str
+    ai_text: str = Field(..., alias="aiText")

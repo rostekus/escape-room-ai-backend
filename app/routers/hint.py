@@ -2,14 +2,28 @@ import io
 import uuid
 from os.path import join
 
+import openai
 import soundfile as sf
 from fastapi import APIRouter
 
 from app.models.hint import ChatResponse
 from app.utils.serializers.audio_serializers import AudioGoogleSerializer
-from app.utils.tts.google_tts import Text2SpeachGoogleApiModel
 from app.utils.tools.generate_link import generate_download_signed_url_v4
+from app.utils.tts.google_tts import Text2SpeachGoogleApiModel
+
 router = APIRouter()
+
+
+riddle_places = {
+    1: "Bedroom",
+    2: "Kitchen",
+    3: "Bedroom -> Kitchen",
+    4: "Bedroom",
+    5: "Kitchen -> Bedroom",
+    6: "Bedroom –-> Kitchen",
+    7: "Kitchen –->Bedroom",
+    8: "Bedroom",
+}
 
 riddle_hints = {
     (
@@ -109,21 +123,83 @@ riddle_hints = {
         3,
     ): "Now it's time for the UV lamp to shine, literally. Check the walls for any hidden writings and look around for marked herbs and bottles. These are the ingredients for a mysterious potion. Hurry up! Make the potion, record the process and try to get out before time runs out.",
 }
+
+
+def get_prev_hints(riddle_id, hint_id):
+    prev_hints = ""
+    for i in range(1, hint_id):
+        prev_hints += f"{i} : "
+        prev_hints += f"{riddle_hints[riddle_id,i]}\n"
+
+    return prev_hints
+
+
 text_to_speech = Text2SpeachGoogleApiModel()
 text_to_speech.load()
 
 
-@router.get("/api/v1/hint/{hint_id}/{riddle_id}")
+def generate_prompt(riddle_place, prev_hint, hint):
+    return """You play role in escape room game. You are in locked the saperate room but
+you have book with hints how to get out. Your role is to help your team to get out of the room but you do that unwillingly.
+
+Background Story:
+Your arrival to the town has created a real flurry, every one of the locals wanted to see you.
+Some with impression, some with hopes of their fears disappearing once and for all. 
+You have decided to stay in a small motel by the main road.
+After unpacking all of your stuff, you decided to go to sleep, since the next day was supposed to be exhausting: looking for clues, speaking with witnesses etc.
+Only if you would have known. 
+Next day miraculously all of you woke up in a strange place. 
+It was a small wooden hut consisting of 2 rooms, between which you were split in half.
+
+Place where team shoul be: {}
+
+Given hints: {}
+
+Hint to be given :{}
+""".format(
+        riddle_place.capitalize(), prev_hint.capitalize(), hint.capitalize()
+    )
+
+
+import os
+
+
+@router.get("/api/v1/hint/{riddle_id}/{hint_id}")
 async def read_user_item(hint_id: int, riddle_id: int) -> ChatResponse:
-    audio_buffer = text_to_speech.process(riddle_hints[(hint_id, riddle_id)], {}, {})
+    openai.api_key = os.environ.get("OPENAI_API_KEY")
+
+    # print((get_prev_hints(riddle_id,hint_id)))
+    # print(riddle_hints[(riddle_id, hint_id)])
+    response = openai.ChatCompletion.create(
+        model="gpt-3.5-turbo",
+        messages=[
+            {
+                "role": "system",
+                "content": generate_prompt(
+                    riddle_places[riddle_id],
+                    get_prev_hints(riddle_id, hint_id),
+                    riddle_hints[(riddle_id, hint_id)],
+                ),
+            },
+            {
+                "role": "user",
+                "content": " Write your hint, add a little bit of mistery and fun.",
+            },
+        ],
+    )
+
+    hint_text = response["choices"][0]["message"]["content"]
+    audio_buffer = text_to_speech.process(hint_text, {}, {})
     audio, audio_sample_rate = sf.read(io.BytesIO(audio_buffer))
     serializer = AudioGoogleSerializer(audio, audio_sample_rate, "wav", "/tmp")
-    audio_filename=  join("audio",str(uuid.uuid4()))
+    audio_filename = join("audio", str(uuid.uuid4()))
     with serializer:
         serializer.serialize(
             "audio-escape-room",
-           audio_filename,
+            audio_filename,
         )
-    url = generate_download_signed_url_v4("audio-escape-room",audio_filename + ".wav")
-    
-    return ChatResponse(audioUrl=url, text=riddle_hints[(hint_id, riddle_id)])
+    url = generate_download_signed_url_v4("audio-escape-room", audio_filename + ".wav")
+
+    return ChatResponse(
+        audioUrl=url, text=riddle_hints[(riddle_id, hint_id)], aiText=hint_text
+    )
